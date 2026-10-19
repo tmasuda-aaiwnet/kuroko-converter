@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Kuroko.Converter.ReportWindow"
+        Icon="/Assets/kuroko-converter.ico"
+        Title="情報" Width="800" Height="660" MinWidth="520" MinHeight="360"
+        WindowStartupLocation="CenterOwner">
+    <DockPanel Margin="12">
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,8,0,0">
+            <Button Content="クリップボードにコピー" Click="Copy_Click" />
+            <Button Content="保存…" Click="Save_Click" />
+            <Button Content="閉じる" Click="Close_Click" />
+        </StackPanel>
+        <TextBox x:Name="ReportText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                 FontFamily="Consolas,Menlo,monospace" FontSize="12" />
+    </DockPanel>
+</Window>

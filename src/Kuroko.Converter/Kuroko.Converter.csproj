@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Kuroko Converter の画面（Avalonia。Windows・macOS・Linux）。引数を付けて起動すると CLI として動く（ConverterCli）。
+       DVD-Video・Blu-ray の ISO と放送の TS を Kuroko（.krk）へ変換する（GPL-3.0-or-later）。外部の ffmpeg・mkvmerge を呼ぶ。 -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Kuroko.Converter</AssemblyName>
+    <RootNamespace>Kuroko.Converter</RootNamespace>
+    <Product>Kuroko Converter</Product>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Version>0.1.0</Version>
+    <Copyright>© 2026 Takao Masuda</Copyright>
+    <!-- 実行ファイルのアイコン（元は kuroko-authoring の art/icons）。窓のアイコンは同じものを AvaloniaResource で。 -->
+    <ApplicationIcon>Assets\kuroko-converter.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Kuroko.Converter.Core\Kuroko.Converter.Core.csproj" />
+    <ProjectReference Include="..\Kuroko.Media\Kuroko.Media.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Kuroko" />
+    <Using Include="Kuroko.Media.Dvd" />
+    <Using Include="Kuroko.Media.Krk" />
+  </ItemGroup>
+
+</Project>

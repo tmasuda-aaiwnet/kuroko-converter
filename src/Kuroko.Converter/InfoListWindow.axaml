@@ -1,0 +1,63 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Kuroko.Converter"
+        x:Class="Kuroko.Converter.InfoListWindow"
+        Icon="/Assets/kuroko-converter.ico"
+        Title="ISO/krk情報（一覧）" Width="1280" Height="560" WindowStartupLocation="CenterOwner">
+    <Window.Styles>
+        <!-- 数値の列は右揃え -->
+        <Style Selector="TextBlock.num">
+            <Setter Property="TextAlignment" Value="Right" />
+            <Setter Property="Margin" Value="0,0,8,0" />
+        </Style>
+        <Style Selector="TextBlock.head">
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </Window.Styles>
+    <DockPanel Margin="10">
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+            <ProgressBar x:Name="Bar" Height="16" Minimum="0" />
+            <TextBlock x:Name="BarText" Margin="0,4,0,0" />
+        </StackPanel>
+        <Border DockPanel.Dock="Top" BorderBrush="Gray" BorderThickness="1,1,1,0" Padding="4">
+            <Grid ColumnDefinitions="220,110,72,72,110,70,105,105,95,70,95,95,95">
+                <TextBlock Grid.Column="0" Classes="head" Text="ファイル名" />
+                <TextBlock Grid.Column="1" Classes="head" Text="ファイル形式" />
+                <TextBlock Grid.Column="2" Classes="head" Text="映像形式" />
+                <TextBlock Grid.Column="3" Classes="head" Text="音声形式" />
+                <TextBlock Grid.Column="4" Classes="head num" Text="ファイルサイズ" />
+                <TextBlock Grid.Column="5" Classes="head num" Text="タイトル数" />
+                <TextBlock Grid.Column="6" Classes="head num" Text="タイトル映像" />
+                <TextBlock Grid.Column="7" Classes="head num" Text="タイトル音声" />
+                <TextBlock Grid.Column="8" Classes="head num" Text="タイトル字幕" />
+                <TextBlock Grid.Column="9" Classes="head num" Text="メニュー数" />
+                <TextBlock Grid.Column="10" Classes="head num" Text="メニュー映像" />
+                <TextBlock Grid.Column="11" Classes="head num" Text="メニュー音声" />
+                <TextBlock Grid.Column="12" Classes="head num" Text="メニュー字幕" />
+            </Grid>
+        </Border>
+        <Border BorderBrush="Gray" BorderThickness="1">
+            <ListBox x:Name="ListGrid">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:InfoRow">
+                        <Grid ColumnDefinitions="220,110,72,72,110,70,105,105,95,70,95,95,95">
+                            <TextBlock Grid.Column="0" Text="{Binding FileName}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FullPath}" Margin="0,0,8,0" />
+                            <TextBlock Grid.Column="1" Text="{Binding Format}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="2" Text="{Binding VideoCodec}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="3" Text="{Binding AudioCodec}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="4" Classes="num" Text="{Binding FileSize}" />
+                            <TextBlock Grid.Column="5" Classes="num" Text="{Binding TitleCount}" />
+                            <TextBlock Grid.Column="6" Classes="num" Text="{Binding TitleVideo}" />
+                            <TextBlock Grid.Column="7" Classes="num" Text="{Binding TitleAudio}" />
+                            <TextBlock Grid.Column="8" Classes="num" Text="{Binding TitleSub}" />
+                            <TextBlock Grid.Column="9" Classes="num" Text="{Binding MenuCount}" />
+                            <TextBlock Grid.Column="10" Classes="num" Text="{Binding MenuVideo}" />
+                            <TextBlock Grid.Column="11" Classes="num" Text="{Binding MenuAudio}" />
+                            <TextBlock Grid.Column="12" Classes="num" Text="{Binding MenuSub}" />
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+    </DockPanel>
+</Window>

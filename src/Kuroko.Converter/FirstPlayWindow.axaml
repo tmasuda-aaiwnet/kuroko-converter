@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Kuroko.Converter.FirstPlayWindow"
+        Icon="/Assets/kuroko-converter.ico"
+        Title="ファーストプレイ設定 — Kuroko(.krk)" Width="820" Height="540" MinWidth="640" MinHeight="460"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="14" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto">
+
+        <TextBlock Grid.Row="0" TextWrapping="Wrap" Margin="0,0,0,12"
+                   Text="krk にファーストプレイ（メディアプレーヤーとして再生したときの開始状態）を設定します。設定すると、その krk はここで指定したタイトル・アングル・音声・字幕で再生を開始します。未設定なら従来どおり タイトル1・アングル1・音声1・字幕なし で始まります。" />
+
+        <!-- 1. ファイルを指定する -->
+        <DockPanel Grid.Row="1" Margin="0,0,0,12">
+            <TextBlock DockPanel.Dock="Left" Text="krk ファイル" VerticalAlignment="Center" Width="90" />
+            <Button x:Name="BrowseButton" DockPanel.Dock="Right" Content="参照…" Margin="8,0,0,0" Click="Browse_Click" />
+            <TextBox x:Name="PathText" IsReadOnly="True" />
+        </DockPanel>
+
+        <!-- 2〜3. タイトル → アングル/音声/字幕 -->
+        <Grid Grid.Row="2" x:Name="ChoicePanel" IsEnabled="False" ColumnDefinitions="90,*" RowDefinitions="Auto,8,Auto,8,Auto,8,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="タイトル" VerticalAlignment="Center" />
+            <ComboBox x:Name="TitleCombo" Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" SelectionChanged="TitleCombo_SelectionChanged" />
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="アングル" VerticalAlignment="Center" />
+            <ComboBox x:Name="AngleCombo" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Stretch" />
+            <TextBlock Grid.Row="4" Grid.Column="0" Text="音声" VerticalAlignment="Center" />
+            <ComboBox x:Name="AudioCombo" Grid.Row="4" Grid.Column="1" HorizontalAlignment="Stretch" />
+            <TextBlock Grid.Row="6" Grid.Column="0" Text="字幕" VerticalAlignment="Center" />
+            <ComboBox x:Name="SubtitleCombo" Grid.Row="6" Grid.Column="1" HorizontalAlignment="Stretch" />
+        </Grid>
+
+        <TextBlock x:Name="CurrentText" Grid.Row="3" Margin="0,12,0,0" TextWrapping="Wrap" Opacity="0.75" />
+
+        <TextBlock Grid.Row="4" VerticalAlignment="Bottom" TextWrapping="Wrap" Opacity="0.75"
+                   Text="※ 保存は krk 全体を詰め直します（映像・音声は再圧縮しません）。ファイルが大きいと時間がかかります。元のファイルは .bak に退避します。" />
+
+        <StackPanel Grid.Row="5" Margin="0,10,0,0">
+            <ProgressBar x:Name="Bar" Height="16" Minimum="0" Maximum="1" />
+            <TextBlock x:Name="StatusText" Margin="0,4,0,0" Text="krk ファイルを指定してください。" />
+        </StackPanel>
+
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8" Margin="0,12,0,0">
+            <Button x:Name="ClearButton" Content="ファーストプレイを削除" IsEnabled="False" Click="Clear_Click"
+                    ToolTip.Tip="krk からファーストプレイの記載を消し、既定（タイトル1・アングル1・音声1・字幕なし）に戻します。" />
+            <Button x:Name="SaveButton" Content="保存" IsEnabled="False" Click="Save_Click" />
+            <Button x:Name="CloseButton" Content="閉じる" Click="Close_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

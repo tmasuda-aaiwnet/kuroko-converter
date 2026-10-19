@@ -1,0 +1,3 @@
+[submodule "external/kuroko-authoring"]
+	path = external/kuroko-authoring
+	url = https://github.com/tmasuda-aaiwnet/kuroko-authoring.git

@@ -1,0 +1,161 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Kuroko.Converter"
+        x:Class="Kuroko.Converter.MainWindow"
+        Icon="/Assets/kuroko-converter.ico"
+        Title="Kuroko Converter — DVD・Blu-ray・TS を Kuroko（.krk）へ変換"
+        Width="1040" Height="800" MinWidth="820" MinHeight="640"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="16" RowDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
+
+        <TextBlock Grid.Row="0" Margin="0,0,0,12" TextWrapping="Wrap"
+                   Text="DVD-Video・Blu-ray の ISO と放送の TS を、Kuroko（.krk）へ一括変換します（暗号化されたものは変換できません）。" />
+
+        <!-- ツールバー：追加・情報・復旧・ファーストプレイ ＋ 既存出力の扱い -->
+        <DockPanel Grid.Row="1" Margin="0,0,0,8">
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="出力が既存の場合:" VerticalAlignment="Center" />
+                <ComboBox x:Name="ExistCombo" Width="120" SelectedIndex="0">
+                    <ComboBoxItem Tag="overwrite" Content="上書き" />
+                    <ComboBoxItem Tag="skip" Content="スキップ" />
+                </ComboBox>
+            </StackPanel>
+            <WrapPanel Orientation="Horizontal">
+                <Button x:Name="AddButton" Content="追加…" Margin="0,0,8,4" Click="Add_Click" />
+                <Button x:Name="InfoButton" Content="ISO/krk情報…" Margin="0,0,8,4" Click="Info_Click"
+                        ToolTip.Tip="ISO（DVD-Video）または .krk（Kuroko）を指定して、タイトル/容量/コーデック/音声・字幕などの情報を表示します。" />
+                <Button x:Name="InfoListButton" Content="ISO/krk情報（一覧）…" Margin="0,0,8,4" Click="InfoList_Click"
+                        ToolTip.Tip="フォルダーを指定し、直下の ISO/krk を一覧で解析します（ファイル名の自然順に上から収集）。" />
+                <Button x:Name="RecoverAudioButton" Content="音声定義の復旧…" Margin="0,0,8,4" Click="RecoverAudio_Click"
+                        ToolTip.Tip="音声が鳴らない .krk（seg.json の音声定義が空）を、内蔵 av.mkv を解析して修復します（ffmpeg 再エンコード不要。元ファイルは .bak に退避）。" />
+                <Button x:Name="FirstPlayButton" Content="ファーストプレイ設定…" Margin="0,0,8,4" Click="FirstPlay_Click"
+                        ToolTip.Tip=".krk（Kuroko）を指定して、メディアプレーヤーとして再生したときの開始状態（タイトル・アングル・音声・字幕）を設定します。" />
+            </WrapPanel>
+        </DockPanel>
+
+        <!-- 変換キューの見出し（列の幅は下の行と同じ） -->
+        <Border Grid.Row="2" BorderBrush="Gray" BorderThickness="1,1,1,0" Padding="4,4">
+            <Grid ColumnDefinitions="110,2*,2*,76,76,76,150">
+                <TextBlock Grid.Column="0" Text="状態" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="1" Text="変換元ファイル名（ダブルクリックで変更）" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="2" Text="変換後ファイル名" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="3" Text="開始時刻" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="4" Text="終了時刻" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="5" Text="処理時間" FontWeight="SemiBold" />
+                <TextBlock Grid.Column="6" Text="操作" FontWeight="SemiBold" />
+            </Grid>
+        </Border>
+        <Border Grid.Row="3" BorderBrush="Gray" BorderThickness="1" Margin="0,0,0,12">
+            <ListBox x:Name="JobList">
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="local:ConvJob">
+                        <Grid ColumnDefinitions="110,2*,2*,76,76,76,150">
+                            <TextBlock Grid.Column="0" Text="{Binding StateText}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Source}" VerticalAlignment="Center" Background="Transparent"
+                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Source}" Margin="0,0,8,0"
+                                       DoubleTapped="SourceCell_DoubleTapped" />
+                            <TextBlock Grid.Column="2" Text="{Binding Output}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Output}" Margin="0,0,8,0" />
+                            <TextBlock Grid.Column="3" Text="{Binding StartText}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="4" Text="{Binding EndText}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="5" Text="{Binding ElapsedText}" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="2">
+                                <Button Content="✕" ToolTip.Tip="削除" Width="32" IsEnabled="{Binding CanEdit}" Click="Delete_Click" />
+                                <Button Content="▲" ToolTip.Tip="上へ移動" Width="32" IsEnabled="{Binding CanEdit}" Click="MoveUp_Click" />
+                                <Button Content="▼" ToolTip.Tip="下へ移動" Width="32" IsEnabled="{Binding CanEdit}" Click="MoveDown_Click" />
+                                <Button Content="↺" ToolTip.Tip="開始待ちへ戻す" Width="32" IsEnabled="{Binding CanReset}" Click="Reset_Click" />
+                            </StackPanel>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+        <!-- パラメータ（全行共通で適用） -->
+        <Grid Grid.Row="4" Margin="0,0,0,12" ColumnDefinitions="Auto,*,20,Auto,*" RowDefinitions="Auto,8,Auto,8,Auto,8,Auto,8,Auto,8,Auto">
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="インターレース方式" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <ComboBox x:Name="InterlaceModeCombo" Grid.Row="0" Grid.Column="1" SelectedIndex="0" HorizontalAlignment="Stretch">
+                <ComboBoxItem Tag="fields" Content="フィールド分離（半高さ・倍フレーム／既定）" />
+                <ComboBoxItem Tag="weave" Content="Weave（1枚に織り込み／従来）" />
+            </ComboBox>
+
+            <TextBlock Grid.Row="0" Grid.Column="3" Text="GOP" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <!-- 選択肢は映像のコーデックで変わる（MainWindow.ApplyCodecChoices。AV1 はクローズドGOPだけ）。 -->
+            <ComboBox x:Name="GopCombo" Grid.Row="0" Grid.Column="4" HorizontalAlignment="Stretch"
+                      ToolTip.Tip="H.264・H.265：オープンGOP（セル先頭のGOPだけクローズド）かクローズドGOP。&#x0a;AV1：常にクローズドGOP（SVT-AV1 の前方キーフレームはシークできないため）。" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Text="CRF（画質）" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <TextBox x:Name="CrfText" Grid.Row="2" Grid.Column="1" Text="32" ToolTip.Tip="小さいほど高画質・大サイズ（AV1 は 0〜63・既定32。H.264/H.265 は既定20）" />
+
+            <TextBlock Grid.Row="2" Grid.Column="3" Text="キーフレーム間隔" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <TextBox x:Name="KeyintText" Grid.Row="2" Grid.Column="4" Text="60" ToolTip.Tip="フレーム数。0=エンコーダの既定（長めGOP）" />
+
+            <TextBlock Grid.Row="4" Grid.Column="0" Text="プリセット" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <!-- 選択肢は映像のコーデックで変わる（MainWindow.ApplyCodecChoices）。 -->
+            <ComboBox x:Name="PresetCombo" Grid.Row="4" Grid.Column="1" HorizontalAlignment="Stretch"
+                      ToolTip.Tip="H.264・H.265：x264/x265 のプリセット（ultrafast〜veryslow）。&#x0a;AV1：SVT-AV1 の段階（0〜13。小さいほど遅く高圧縮）。かっこは x264/x265 の名前で言うとどれに当たるか。" />
+
+            <TextBlock Grid.Row="4" Grid.Column="3" Text="音声" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <ComboBox x:Name="AudioCombo" Grid.Row="4" Grid.Column="4" SelectedIndex="0" HorizontalAlignment="Stretch"
+                      ToolTip.Tip="Opus 2ch：全音声を Opus へ再符号化し、3ch以上は2chへダウンミックスする（小サイズ・既定）。&#x0a;Opus（ch維持）：Opus へ再符号化するがチャンネル数は元のまま（5.1chは5.1chのまま）。">
+                <ComboBoxItem Tag="opus" Content="Opus 2ch（3ch以上は2chにダウンミックス）（既定）" />
+                <ComboBoxItem Tag="opus-src" Content="Opus（チャンネル数はオリジナルのまま維持）" />
+            </ComboBox>
+
+            <TextBlock Grid.Row="6" Grid.Column="0" Text="映像" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <ComboBox x:Name="VideoCodecCombo" Grid.Row="6" Grid.Column="1" SelectedIndex="0" HorizontalAlignment="Stretch"
+                      SelectionChanged="VideoCodecCombo_SelectionChanged"
+                      ToolTip.Tip="タイトル/メニューの両方をこのコーデックで圧縮する。&#x0a;AV1（SVT-AV1）：同じ画質なら H.265 より小さく速い（既定）。インターレースの扱いは H.265 と同じ。GOP は常にクローズド。&#x0a;　プリセットは SVT-AV1 の段階（0〜13）を選ぶ。GOP はクローズドだけ。&#x0a;　CRF の目盛りが違う（0〜63・既定 32）。&#x0a;　再生には AV1 の krk に対応した再生器が要る。&#x0a;H.265：高圧縮。実インターレースは weave フレームをプログレッシブとして符号化し、再生側で bob 解除（フィールド情報は保持）。&#x0a;H.264：従来どおり（実インターレースはインターレース符号化）。">
+                <ComboBoxItem Tag="av1" Content="AV1（SVT-AV1・既定）" />
+                <ComboBoxItem Tag="h265" Content="H.265 / HEVC（高圧縮）" />
+                <ComboBoxItem Tag="h264" Content="H.264 / AVC（従来）" />
+            </ComboBox>
+
+            <TextBlock Grid.Row="6" Grid.Column="3" Text="音声ビットレート/ch" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <ComboBox x:Name="AudioBitrateCombo" Grid.Row="6" Grid.Column="4" HorizontalAlignment="Stretch"
+                      ToolTip.Tip="1チャンネルあたりの出力ビットレート(kbps)。実際の指定値はこれ×出力チャンネル数（2chなら×2、5.1ch維持なら×6）。" />
+
+            <TextBlock Grid.Row="8" Grid.Column="0" Text="変換後サフィックス" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <TextBox x:Name="SuffixText" Grid.Row="8" Grid.Column="1" TextChanged="SuffixText_TextChanged"
+                     ToolTip.Tip="変換後ファイル名は「変換元のファイル名（拡張子を .krk に変更）」で、拡張子の前にこの文字列を挿入します。&#x0a;例：サフィックス=_h265 なら movie.iso → movie_h265.krk（空なら movie.krk）。" />
+
+            <TextBlock Grid.Row="8" Grid.Column="3" Text="変換時間(秒)" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <TextBox x:Name="MaxSecText" Grid.Row="8" Grid.Column="4"
+                     ToolTip.Tip="先頭から指定秒数だけ変換する（動作確認用）。空欄＝無制限（全体）。" />
+
+            <TextBlock Grid.Row="10" Grid.Column="0" Text="インターレース最小長" VerticalAlignment="Center" Margin="0,0,12,0" />
+            <TextBox x:Name="FieldsMinFramesText" Grid.Row="10" Grid.Column="1" Text="30"
+                     ToolTip.Tip="フィールド分離時のみ有効。プログレッシブ（film）に隣接し、連続フレーム数がこの値未満の&#x0a;実インターレース小区間は fields にせず Weave 扱いにする。単位＝フレーム。既定30（≒1秒）。0=降格しない。" />
+        </Grid>
+
+        <!-- 外部ツールの場所（ffmpeg / mkvmerge。同梱しない） -->
+        <StackPanel Grid.Row="5" Margin="0,0,0,12" Spacing="8">
+            <DockPanel>
+                <TextBlock Text="ffmpeg" Width="100" VerticalAlignment="Center" />
+                <Button x:Name="FfmpegBrowseButton" DockPanel.Dock="Right" Content="参照…" Margin="8,0,0,0" Click="FfmpegBrowse_Click" />
+                <TextBox x:Name="FfmpegText" ToolTip.Tip="ffmpeg の実行ファイル（libx264・libx265・libsvtav1・libopus 入り）。ffprobe は同じフォルダから自動。" />
+            </DockPanel>
+            <DockPanel>
+                <TextBlock Text="mkvmerge" Width="100" VerticalAlignment="Center" />
+                <Button x:Name="MkvmergeBrowseButton" DockPanel.Dock="Right" Content="参照…" Margin="8,0,0,0" Click="MkvmergeBrowse_Click" />
+                <TextBox x:Name="MkvmergeText" ToolTip.Tip="MKVToolNix の mkvmerge。Kuroko(.krk) の映像の時刻の焼き直しに使う。" />
+            </DockPanel>
+        </StackPanel>
+
+        <!-- ログ（処理中ファイルのレポート） -->
+        <TextBox x:Name="LogText" Grid.Row="6" Height="110" Margin="0,0,0,12" IsReadOnly="True"
+                 FontFamily="Consolas,Menlo,monospace" FontSize="12" TextWrapping="NoWrap" AcceptsReturn="True" />
+
+        <!-- 進捗（処理中ファイル） -->
+        <StackPanel Grid.Row="7" Margin="0,0,0,8">
+            <ProgressBar x:Name="Progress" Height="18" Minimum="0" Maximum="1" />
+            <TextBlock x:Name="StatusText" Margin="0,6,0,0" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- ボタン -->
+        <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+            <Button x:Name="RunButton" Content="変換開始" Width="120" Height="36" HorizontalContentAlignment="Center" Click="Run_Click" />
+            <Button x:Name="CancelButton" Content="中止" Width="120" Height="36" HorizontalContentAlignment="Center" IsVisible="False" Click="Cancel_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

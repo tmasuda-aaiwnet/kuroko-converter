@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- 媒体の解析：DVD-Video（Kuroko.Media.Dvd）・krk の映像の読み出し
+         （Kuroko.Media.Krk）・ffmpeg のライブラリの場所（Kuroko.Media.Ffmpeg）。 -->
+    <RootNamespace>Kuroko.Media</RootNamespace>
+    <AssemblyName>Kuroko.Media</AssemblyName>
+  </PropertyGroup>
+
+  <!-- 型は internal のまま。変換器（Kuroko.Converter）と、同じ著作権者の再生器（Vuecove の各アセンブリ）へ見せる。 -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Vuecove" />
+    <InternalsVisibleTo Include="Vuecove.Facade" />
+    <InternalsVisibleTo Include="Vuecove.Platform.Windows" />
+    <InternalsVisibleTo Include="Vuecove.Playback" />
+    <InternalsVisibleTo Include="Kuroko.Converter" />
+    <InternalsVisibleTo Include="Kuroko.Converter.Core" />
+    <InternalsVisibleTo Include="VuecoveFacade" />
+  </ItemGroup>
+
+  <!-- Kuroko（.krk）の形式の読み書きと DVD-Video 互換の VM は Kuroko SDK（kuroko-authoring・MIT）にある。
+       既定はこのリポジトリのサブモジュール（external/kuroko-authoring）。このリポジトリを別のリポジトリの中で使うとき
+       （再生器など）は、外側で KurokoSdkProject を設定して、外側の SDK を使わせる（同じ SDK を二重に参照しないため）。 -->
+  <PropertyGroup>
+    <KurokoSdkProject Condition="'$(KurokoSdkProject)' == ''">$(MSBuildThisFileDirectory)..\..\external\kuroko-authoring\src\Kuroko.Sdk\Kuroko.Sdk.csproj</KurokoSdkProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(KurokoSdkProject)" />
+    <Using Include="Kuroko" />
+    <Using Include="Kuroko.Media.Dvd" />
+    <Using Include="Kuroko.Media.Krk" />
+    <Using Include="Kuroko.Media.Ffmpeg" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="external/kuroko-authoring/src/Kuroko.Sdk/Kuroko.Sdk.csproj" />
+  <Project Path="src/Kuroko.Media/Kuroko.Media.csproj" />
+  <Project Path="src/Kuroko.Converter.Core/Kuroko.Converter.Core.csproj" />
+  <Project Path="src/Kuroko.Converter/Kuroko.Converter.csproj" />
+</Solution>

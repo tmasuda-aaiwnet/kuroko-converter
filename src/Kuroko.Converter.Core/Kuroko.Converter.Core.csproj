@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Kuroko Converter の中身（画面を持たない部分）：DVD・BD・TS から krk への変換、暗号化の確認、外部の ffmpeg・mkvmerge の
+       場所、CLI。Windows・macOS・Linux で動く。画面は Kuroko.Converter（Avalonia）。 -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>Kuroko.Converter</RootNamespace>
+    <AssemblyName>Kuroko.Converter.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Kuroko.Converter" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 媒体の解析（DVD の IFO・UDF／ISO 9660・BD・放送 TS・krk の映像の読み出し）。 -->
+    <ProjectReference Include="..\Kuroko.Media\Kuroko.Media.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Kuroko" />
+    <Using Include="Kuroko.Media.Dvd" />
+    <Using Include="Kuroko.Arib" />
+    <Using Include="Kuroko.Media.Krk" />
+    <Using Include="Kuroko.Media.Ffmpeg" />
+  </ItemGroup>
+
+</Project>
