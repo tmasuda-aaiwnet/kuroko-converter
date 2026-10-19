@@ -68,6 +68,7 @@ dotnet run --project src/Kuroko.Converter
 | `src/Kuroko.Converter.Core` | 変換器の中身（DVD／BD／TS から krk への変換・暗号化の確認・外部ツールの場所・CLI）。画面を持たない |
 | `src/Kuroko.Media` | DVD-Video（IFO・NAV・SPU・UDF／ISO 9660）・Blu-ray（MPLS・CLPI）の解析と、krk の映像の読み出し |
 | `external/kuroko-authoring` | Kuroko SDK（形式の読み書き・DVD 互換の仮想マシン。MIT。サブモジュール） |
+| `packaging` | ビルド済みのもの（Releases）の作り方。Windows・Linux は `build-release.sh`、macOS は `macos/`。 |
 
 ## 変更の受け入れについて
 
