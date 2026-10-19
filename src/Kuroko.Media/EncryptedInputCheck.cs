@@ -1,9 +1,9 @@
 using System.IO;
-using Kuroko.Media.Dvd;
 
-namespace Kuroko.Converter;
+namespace Kuroko.Media.Dvd;
 
-// 暗号化されたままの入力を見分けて、変換を断る（この変換器は暗号の解除をしない・できない）。
+// 暗号化されたままの入力を見分ける（変換器は変換を、再生器 Vuecove は再生を断る。どちらも暗号の解除をしない・できない）。
+// 結果は「何が・どう保護されているか」（EncryptedInput）で返し、利用者へ出す文は使う側が Message で組み立てる。
 //
 // 見るのは「**今まさに暗号化されているか**」だけ。一度解除されたものの痕跡（DVD の管理情報の CSS の印、BD の AACS の
 // フォルダ、TS の番組情報のスクランブル方式の記述）は、自作の正当なディスクまで拒むおそれがあるので判定に使わない。
@@ -12,19 +12,30 @@ namespace Kuroko.Converter;
 //    された単位は 0 以外）と、TS の同期バイト（暗号化された単位は 2 つ目以降のパケットが TS として読めない）。
 //  ・TS（放送のスクランブル）：映像・音声のパケットの transport_scrambling_control（スクランブル中は 0 以外）。
 // どれも、ファイルの先頭と途中から一部を読むだけで判定する（全体は読まない）。
+// 見つかった保護。Medium＝「DVD」など、Protection＝「暗号化（CSS）」「スクランブル」など、Detail＝どのファイル・どれだけか。
+internal sealed record EncryptedInput(string Medium, string Protection, string Detail)
+{
+    // tool＝「この変換器」「Vuecove」、action＝「変換」「再生」。
+    public string Message(string tool, string action)
+        => $"この {Medium} は{Protection}されたままです（{Detail}）。{tool}{(char.IsAscii(tool[^1]) ? " " : "")}は"
+           + (Protection == "スクランブル" ? "スクランブルの解除" : "暗号の解除") + $"をしないので、{action}できません。";
+}
+
 internal static class EncryptedInputCheck
 {
-    // 暗号化されていれば、その説明（利用者へ出すエラー文）。されていなければ null。
-    public static string? CheckDvdIso(string isoPath)
+    // 暗号化されていれば、その内容。されていなければ null。
+    public static EncryptedInput? CheckDvdIso(string isoPath)
     {
+        int checkedFiles = 0;
         foreach (var (name, stream) in OpenFiles(isoPath, "VIDEO_TS",
                      n => n.StartsWith("VTS_", StringComparison.OrdinalIgnoreCase)
                           && n.EndsWith(".VOB", StringComparison.OrdinalIgnoreCase)
-                          && !n.EndsWith("_0.VOB", StringComparison.OrdinalIgnoreCase)))
+                          && !n.EndsWith("_0.VOB", StringComparison.OrdinalIgnoreCase), largestFirst: true))
         {
             using (stream)
                 if (VobScrambled(stream))
-                    return $"この DVD は暗号化（CSS）されたままです（{name}）。この変換器は暗号の解除をしないので、変換できません。";
+                    return new EncryptedInput("DVD", "暗号化（CSS）", name);
+            if (++checkedFiles >= 4) break; // 大きいものから 4 本見れば足りる（CSS はタイトルの VOB 全体にかかる）
         }
         return null;
     }
@@ -42,7 +53,7 @@ internal static class EncryptedInputCheck
         return false;
     }
 
-    public static string? CheckBdIso(string isoPath)
+    public static EncryptedInput? CheckBdIso(string isoPath)
     {
         int checkedFiles = 0;
         foreach (var (name, stream) in OpenFiles(isoPath, "BDMV/STREAM",
@@ -50,7 +61,7 @@ internal static class EncryptedInputCheck
         {
             using (stream)
                 if (M2tsEncrypted(stream))
-                    return $"この Blu-ray は暗号化（AACS）されたままです（{name}）。この変換器は暗号の解除をしないので、変換できません。";
+                    return new EncryptedInput("Blu-ray", "暗号化（AACS）", name);
             if (++checkedFiles >= 4) break; // 大きいものから 4 本見れば足りる
         }
         return null;
@@ -69,7 +80,7 @@ internal static class EncryptedInputCheck
         return false;
     }
 
-    public static string? CheckTs(string tsPath)
+    public static EncryptedInput? CheckTs(string tsPath)
     {
         using var fs = new FileStream(tsPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1 << 16);
         int packetSize = DetectTsPacketSize(fs);
@@ -93,7 +104,7 @@ internal static class EncryptedInputCheck
         }
         // 一部のパケットだけが印つきでも、映像・音声が読めないので断る（1% を越えたら）。
         if (payload > 0 && scrambled * 100 > payload)
-            return $"この TS はスクランブルされたままです（{scrambled:N0}/{payload:N0} パケット）。この変換器はスクランブルの解除をしないので、変換できません。";
+            return new EncryptedInput("TS", "スクランブル", $"{scrambled:N0}/{payload:N0} パケット");
         return null;
     }
 

@@ -35,7 +35,7 @@ internal static class BdNoneConverter
             if (!File.Exists(isoPath)) return "ERROR: 入力が見つかりません: " + isoPath;
             if (Reject(opt) is string why) return log + "\nERROR: " + why;
             // 暗号化（AACS）されたままの Blu-ray は断る（解除はしない）。
-            if (EncryptedInputCheck.CheckBdIso(isoPath) is string enc) return log + "\nERROR: " + enc;
+            if (EncryptedInputCheck.CheckBdIso(isoPath) is { } enc) return log + "\nERROR: " + enc.Message("この変換器", "変換");
 
             using var udf = new UdfReader(isoPath);
             var plan = BdKurokoPlanner.Build(udf);

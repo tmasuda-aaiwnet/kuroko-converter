@@ -86,7 +86,7 @@ internal static class TsNoneConverter
         {
             if (!File.Exists(tsPath)) return "ERROR: 入力が見つかりません: " + tsPath;
             // スクランブルされたままの TS は断る（解除はしない）。
-            if (EncryptedInputCheck.CheckTs(tsPath) is string enc) return "ERROR: " + enc;
+            if (EncryptedInputCheck.CheckTs(tsPath) is { } enc) return "ERROR: " + enc.Message("この変換器", "変換");
             var services = ProbeServices(opt.FfprobePath, tsPath, log);
             if (services.Count == 0) return log + "\nERROR: 映像のあるサービスが見つかりません";
             log.AppendLine($"ts: services={services.Count} [{string.Join(", ", services.Select(s => $"{s.ProgramNum}:{s.Name}"))}]");

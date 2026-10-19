@@ -257,13 +257,13 @@ internal static class ConverterCli
                     else if (ext == ".m2ts")
                         using (var ms = File.OpenRead(inPath)) result = EncryptedInputCheck.M2tsEncrypted(ms) ? "暗号化（AACS）されている" : "暗号化されていない";
                     else if (ext == ".ts")
-                        result = EncryptedInputCheck.CheckTs(inPath) ?? "スクランブルされていない";
+                        result = EncryptedInputCheck.CheckTs(inPath)?.Message("この変換器", "変換") ?? "スクランブルされていない";
                     else
                     {
                         bool bd;
                         try { using var u = new UdfReader(inPath); bd = u.FindEntry("BDMV") is not null; }
                         catch { bd = false; }
-                        result = (bd ? EncryptedInputCheck.CheckBdIso(inPath) : EncryptedInputCheck.CheckDvdIso(inPath))
+                        result = (bd ? EncryptedInputCheck.CheckBdIso(inPath) : EncryptedInputCheck.CheckDvdIso(inPath))?.Message("この変換器", "変換")
                                  ?? $"暗号化されていない（{(bd ? "Blu-ray" : "DVD")}）";
                     }
                     File.WriteAllText(args[2], result);

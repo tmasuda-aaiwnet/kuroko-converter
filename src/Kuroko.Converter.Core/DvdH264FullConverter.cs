@@ -21,7 +21,7 @@ internal static class DvdH264FullConverter
     {
         var log = new StringBuilder();
         // 暗号化（CSS）されたままの DVD は断る（解除はしない）。
-        try { if (EncryptedInputCheck.CheckDvdIso(srcIso) is string enc) return "ERROR: " + enc; }
+        try { if (EncryptedInputCheck.CheckDvdIso(srcIso) is { } enc) return "ERROR: " + enc.Message("この変換器", "変換"); }
         catch (Exception ex) { log.AppendLine($"暗号化の確認に失敗（続ける）: {ex.Message}"); }
         string work = Path.Combine(Path.GetTempPath(), "vuecove-krk-" + Guid.NewGuid().ToString("N").Substring(0, 8));
         Directory.CreateDirectory(work);
