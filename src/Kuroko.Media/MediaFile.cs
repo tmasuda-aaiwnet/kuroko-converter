@@ -17,7 +17,9 @@ internal static class MediaFile
         set { s_override = value; KurokoIo.OpenReadOverride = value; }
     }
 
+    // 書き込み中のファイル（録画中の TS）も開けるよう、他のプロセスの書き込み・削除を許す（FileShare.Read だけだと、録画ソフトが
+    // 書き込みで開いている間は「使用中」で開けない。Vuecove の中身の判定がこれで失敗し、再生（ReadWrite で開く）はできていた）。
     public static Stream OpenRead(string path, int bufferSize = 4096)
         => OpenReadOverride?.Invoke(path)
-           ?? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize);
+           ?? new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize);
 }
