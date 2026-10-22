@@ -29,7 +29,11 @@ internal interface IKurokoDemuxer : IDisposable
     IntPtr TryGetCodecPar(int streamIndex) => IntPtr.Zero;
 }
 
-// .krk 内 av.mkv を再生するための Matroska デマルチプレクサ。同梱 LGPL ffmpeg（avformat）に
+// .krk 内 av.mkv を再生するための Matroska デマルチプレクサ。
+// **既定は自前の MatroskaReader（Kuroko SDK）**：ffmpeg を使わない（再生器に LGPL を同梱しない方針）。パケットの並び・時刻
+//（CodecDelay を引く・レーシングの割り振り）・キー・中身・シーク後の着地は ffmpeg と同じになるよう合わせてある。
+// 環境変数 VUECOVE_MANAGED_DEMUX=0 で従来の ffmpeg（下の説明）。
+// 従来：同梱 LGPL ffmpeg（avformat）に
 // custom AVIO で任意の Stream（Iso9660Reader.OpenRead の BoundedStream 等）を食わせ、
 // av_read_frame でパケット列（映像h264/音声ac3/字幕vobsub）を取り出す。
 //
@@ -77,8 +81,12 @@ internal sealed class KurokoMkvDemuxer : IDisposable, IKurokoDemuxer
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate int ReadPacketCb(IntPtr opaque, IntPtr buf, int bufSize);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] private delegate long SeekCb(IntPtr opaque, long offset, int whence);
 
+    // 自前の MatroskaReader を使うか（既定）
+    public static readonly bool UseManaged = Environment.GetEnvironmentVariable("VUECOVE_MANAGED_DEMUX") != "0";
+
     public static bool TryLoad(string? ffmpegDir, out string error)
     {
+        if (UseManaged) { error = ""; return true; }
         lock (SyncRoot)
         {
             if (_loaded) { error = ""; return true; }
@@ -160,14 +168,22 @@ internal sealed class KurokoMkvDemuxer : IDisposable, IKurokoDemuxer
     private IntPtr _packet;
     private bool _disposed;
 
+    // 自前の読み出し（UseManaged のとき）
+    private readonly Kuroko.Matroska.MatroskaReader? _mkv;
+    private readonly Dictionary<int, IntPtr> _managedPar = new();
+
     public KurokoMkvDemuxer(Stream stream, bool leaveOpen = false)
     {
-        if (!_loaded) throw new InvalidOperationException("KurokoMkvDemuxer.TryLoad() が先に必要です。");
         _stream = stream;
         _leaveOpen = leaveOpen;
         _readCb = ReadPacketImpl;
         _seekCb = SeekImpl;
-
+        if (UseManaged)
+        {
+            _mkv = new Kuroko.Matroska.MatroskaReader(stream, leaveOpen: true);
+            return;
+        }
+        if (!_loaded) throw new InvalidOperationException("KurokoMkvDemuxer.TryLoad() が先に必要です。");
         IntPtr buffer = _avMalloc((UIntPtr)IoBufferSize);
         if (buffer == IntPtr.Zero) throw new OutOfMemoryException("av_malloc 失敗");
         _avioCtx = _avioAlloc(buffer, IoBufferSize, 0, IntPtr.Zero, _readCb, IntPtr.Zero, _seekCb);
@@ -239,6 +255,7 @@ internal sealed class KurokoMkvDemuxer : IDisposable, IKurokoDemuxer
     {
         packet = default;
         if (_disposed) return false;
+        if (_mkv is not null) return ReadPacketManaged(out packet);
         LastReadThrew = false;        // この av_read_frame 中に下位読み取りが例外落ちしたかを測る
         LastReadUnexpectedEof = false; // 同上（末尾未到達の 0 バイト）
         int rc = _readFrame(_fmtCtx, _packet);
@@ -260,6 +277,31 @@ internal sealed class KurokoMkvDemuxer : IDisposable, IKurokoDemuxer
             return true;
         }
         finally { _packetUnref(_packet); }
+    }
+
+    private bool ReadPacketManaged(out MkvPacket packet)
+    {
+        packet = default;
+        LastReadThrew = false;
+        LastReadUnexpectedEof = false;
+        Kuroko.Matroska.MatroskaFrame f;
+        try
+        {
+            if (!_mkv!.ReadFrame(out f))
+            {
+                LastReadUnexpectedEof = _mkv.EndedEarly;
+                return false;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or UnauthorizedAccessException or InvalidDataException)
+        {
+            LastReadThrew = true;
+            return false;
+        }
+        double ms = f.HasTimestamp ? f.Timestamp * (_mkv.TimestampScaleNs / 1e6) : -1;
+        // DTS は PTS と同じ（再生器は DTS を使わない。ffmpeg は B フレームのある映像で推定値を入れていた）
+        packet = new MkvPacket(f.TrackIndex, ms, ms, f.KeyFrame, f.Data, 0, HasPts: f.HasTimestamp, HasDts: f.HasTimestamp);
+        return true;
     }
 
     // AVStream.time_base を全ストリーム分控える。取れなければ 1/1000（従来の既定）のまま。
@@ -299,6 +341,12 @@ internal sealed class KurokoMkvDemuxer : IDisposable, IKurokoDemuxer
     // 返すのは avformat が所有するポインタなので、**この Demuxer が生きている間だけ有効**。
     public IntPtr TryGetCodecPar(int streamIndex)
     {
+        if (_mkv is not null)
+        {
+            if (_disposed || streamIndex < 0 || streamIndex >= _mkv.Tracks.Count) return IntPtr.Zero;
+            if (!_managedPar.TryGetValue(streamIndex, out var par)) _managedPar[streamIndex] = par = FfCodecPar.Create(_mkv.Tracks[streamIndex]);
+            return par;
+        }
         if (_disposed || _fmtCtx == IntPtr.Zero || streamIndex < 0) return IntPtr.Zero;
         try
         {
@@ -316,6 +364,11 @@ internal sealed class KurokoMkvDemuxer : IDisposable, IKurokoDemuxer
     public bool SeekMs(int streamIndex, long ms)
     {
         if (_disposed) return false;
+        if (_mkv is not null)
+        {
+            try { return _mkv.Seek((long)System.Math.Round(ms * 1e6 / _mkv.TimestampScaleNs), streamIndex); }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException) { LastReadThrew = true; return false; }
+        }
         // av_seek_frame の時刻は**そのストリームの time_base 単位**。1ms 固定で渡すと 1μs スケールの krk で
         // 1000 分の 1 の位置へ飛ぶ（＝常に先頭付近）。実体の time_base で換算する。
         var tb = _timeBase.TryGetValue(streamIndex, out var t) ? t : _seekTimeBase;
@@ -327,6 +380,14 @@ internal sealed class KurokoMkvDemuxer : IDisposable, IKurokoDemuxer
     {
         if (_disposed) return;
         _disposed = true;
+        if (_mkv is not null)
+        {
+            foreach (var par in _managedPar.Values) FfCodecPar.Free(par);
+            _managedPar.Clear();
+            _mkv.Dispose();
+            if (!_leaveOpen) { try { _stream.Dispose(); } catch { } }
+            return;
+        }
         if (_packet != IntPtr.Zero) { var p = _packet; _packetFree(ref p); _packet = IntPtr.Zero; }
         if (_fmtCtx != IntPtr.Zero) { var c = _fmtCtx; _closeInput(ref c); _fmtCtx = IntPtr.Zero; }
         if (_avioCtx != IntPtr.Zero)
