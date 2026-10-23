@@ -3454,28 +3454,29 @@ internal static class DvdH264FullConverter
     // RFF の無い 2 フィールドの絵に progressive_frame＝0 を付けた DVD がある（ある市販ディスク T15：RFF のプログレッシブと混ざる。
     // 中身はプログレッシブで、ffmpeg の idet でも 710 対 33 でプログレッシブ）。印のまま interlacedRanges に書くと、再生側が
     // その絵だけデインターレースし（縦の解像度が落ちる）、映像情報も 8.56i のようになっていた。
-    // 規則は再生器（Vuecove の Mpeg2FilmCadence）と同じ：直近 10 枚のうち 3 枚以上が RFF のプログレッシブなら、RFF の無い
-    // 印だけインターレースの絵はプログレッシブ。ただし印の絵が 5 枚以上続けば本当のインターレース（映画の中の実写・ディゾルブ）。
+    // 規則：その絵を挟む 10 枚（前 5 枚・後ろ 4 枚）のうち 3 枚以上が RFF のプログレッシブなら、RFF の無い印だけインターレースの
+    // 絵はプログレッシブ。ただし印の絵の連続が 5 枚以上なら本当のインターレース（映画の中の実写・ディゾルブ）。
+    // 再生器（Vuecove の Mpeg2FilmCadence）は後ろの絵を見られないので直近 10 枚で見るが、変換器は全部の絵を持っているので
+    // 前後を見る（直近だけだと、本当のインターレースの導入部のすぐ後で映画が始まった最初の 2 枚が区間に残っていた）。
     private static void NormalizeFilmCadence(List<byte> fields, List<bool> prog)
     {
-        const int window = 10, minRff = 3, maxRun = 4;
-        var rff = new bool[window];
-        int idx = 0, rffCount = 0, iRun = 0;
+        const int before = 5, after = 4, minRff = 3, maxRun = 4;
         int n = Math.Min(fields.Count, prog.Count);
-        for (int k = 0; k < n; k++)
+        var rffPrefix = new int[n + 1];
+        for (int k = 0; k < n; k++) rffPrefix[k + 1] = rffPrefix[k] + (fields[k] == 3 && prog[k] ? 1 : 0);
+        var flagged = new bool[n];
+        for (int k = 0; k < n; k++) flagged[k] = !prog[k] && fields[k] == 2;
+        for (int k = 0; k < n; )
         {
-            bool rffProg = fields[k] == 3 && prog[k];
-            bool flaggedI = !prog[k] && fields[k] == 2;
-            if (flaggedI)
-            {
-                iRun++;
-                if (rffCount >= minRff && iRun <= maxRun) prog[k] = true;
-            }
-            else iRun = 0;
-            if (rff[idx]) rffCount--;
-            rff[idx] = rffProg;
-            if (rffProg) rffCount++;
-            idx = (idx + 1) % window;
+            if (!flagged[k]) { k++; continue; }
+            int e = k; while (e < n && flagged[e]) e++;      // [k, e) が印だけインターレースの絵の連続
+            if (e - k <= maxRun)
+                for (int m = k; m < e; m++)
+                {
+                    int lo = Math.Max(0, m - before), hi = Math.Min(n, m + after + 1);
+                    if (rffPrefix[hi] - rffPrefix[lo] >= minRff) prog[m] = true;
+                }
+            k = e;
         }
     }
 
