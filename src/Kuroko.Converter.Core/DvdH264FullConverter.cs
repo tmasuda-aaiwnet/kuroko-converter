@@ -3446,7 +3446,37 @@ internal static class DvdH264FullConverter
         order.Sort((x, y) => rows[x].pts != rows[y].pts ? rows[x].pts.CompareTo(rows[y].pts) : x.CompareTo(y)); // 表示順(PTS昇順)・安定
         var pl = new List<long>(rows.Count); var fl = new List<byte>(rows.Count); var prl = new List<bool>(rows.Count);
         foreach (var i in order) { pl.Add(rows[i].pts); fl.Add(rows[i].fields); prl.Add(rows[i].prog); }
+        NormalizeFilmCadence(fl, prl);
         return (pl, fl, prl);
+    }
+
+    // 3:2（ソフトテレシネ）の中の「印だけインターレース」の絵をプログレッシブへ直す（表示順）。映画を RFF で 3:2 にしながら、
+    // RFF の無い 2 フィールドの絵に progressive_frame＝0 を付けた DVD がある（ある市販ディスク T15：RFF のプログレッシブと混ざる。
+    // 中身はプログレッシブで、ffmpeg の idet でも 710 対 33 でプログレッシブ）。印のまま interlacedRanges に書くと、再生側が
+    // その絵だけデインターレースし（縦の解像度が落ちる）、映像情報も 8.56i のようになっていた。
+    // 規則は再生器（Vuecove の Mpeg2FilmCadence）と同じ：直近 10 枚のうち 3 枚以上が RFF のプログレッシブなら、RFF の無い
+    // 印だけインターレースの絵はプログレッシブ。ただし印の絵が 5 枚以上続けば本当のインターレース（映画の中の実写・ディゾルブ）。
+    private static void NormalizeFilmCadence(List<byte> fields, List<bool> prog)
+    {
+        const int window = 10, minRff = 3, maxRun = 4;
+        var rff = new bool[window];
+        int idx = 0, rffCount = 0, iRun = 0;
+        int n = Math.Min(fields.Count, prog.Count);
+        for (int k = 0; k < n; k++)
+        {
+            bool rffProg = fields[k] == 3 && prog[k];
+            bool flaggedI = !prog[k] && fields[k] == 2;
+            if (flaggedI)
+            {
+                iRun++;
+                if (rffCount >= minRff && iRun <= maxRun) prog[k] = true;
+            }
+            else iRun = 0;
+            if (rff[idx]) rffCount--;
+            rff[idx] = rffProg;
+            if (rffProg) rffCount++;
+            idx = (idx + 1) % window;
+        }
     }
 
     // テレシネ耐性＋短区間統合の「fields対象（＝真のインターレース）」判定。
