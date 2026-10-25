@@ -1,5 +1,20 @@
 # 変更履歴 / Changelog
 
+## v0.1.1
+
+- DVD の 3:2（ソフトテレシネ）の中で、印だけインターレースになっている絵をインターレースの区間に入れないようにした（前後 10 枚で判定）。
+  映画の始まりの数枚などが、不要にインターレースとして扱われていた。
+  / Frames inside DVD 3:2 pulldown (soft telecine) that are only flagged as interlaced are no longer put into the
+  interlaced ranges (judged from the 10 frames before and after). A few frames, such as those at the start of a film,
+  were needlessly treated as interlaced.
+- Kuroko.Media（再生器と共有するライブラリ）：krk の mkv を、ffmpeg の libavformat ではなく Kuroko SDK の `MatroskaReader` で
+  読むようにした。変換器の動作には関係しない。
+  / Kuroko.Media (the library shared with the player): Kuroko's mkv files are now read with the Kuroko SDK's
+  `MatroskaReader` instead of ffmpeg's libavformat. This does not affect the converter.
+- 書き込み中のファイルも開けるようにした（録画中の TS など）。
+  / Files that are still being written (such as a TS being recorded) can now be opened.
+- Kuroko SDK を v0.1.1 へ。/ Kuroko SDK updated to v0.1.1.
+
 ## v0.1.0 — プレビュー / Preview
 
 最初の公開。/ First public release.

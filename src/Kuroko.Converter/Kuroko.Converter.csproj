@@ -11,7 +11,7 @@
     <RootNamespace>Kuroko.Converter</RootNamespace>
     <Product>Kuroko Converter</Product>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Copyright>© 2026 Takao Masuda</Copyright>
     <!-- 実行ファイルのアイコン（元は kuroko-authoring の art/icons）。窓のアイコンは同じものを AvaloniaResource で。 -->
     <ApplicationIcon>Assets\kuroko-converter.ico</ApplicationIcon>
