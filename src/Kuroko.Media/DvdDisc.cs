@@ -474,7 +474,9 @@ internal sealed class DvdTitlePlayback
         for (int iter = 0; iter < 18 && lo <= hi; iter++)
         {
             long mid = (lo + hi) / 2;
-            long pts = ReadVideoPts(stream, mid, cellSectors);
+            // 映像 PES の PTS は GOP に 1 個（約 0.5 秒＝数百セクタに 1 回）しか無い。既定の 64 セクタでは見つからないことが多く、
+            // 見つからない＝手前を探す、が続いて目標より大きく手前（実測 66 秒）で開いていた。GOP 1 個ぶん以上を見る。
+            long pts = ReadVideoPts(stream, mid, cellSectors, maxScan: 1024);
             if (pts < 0) { hi = mid - 1; continue; }            // 近傍に映像PTS無し → 手前を探す
             if (pts <= targetPts90k) { best = mid; bestPts = pts; lo = mid + 1; }
             else hi = mid - 1;
