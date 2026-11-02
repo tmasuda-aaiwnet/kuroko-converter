@@ -113,7 +113,19 @@ internal sealed class KurokoMkvDemuxer : IDisposable, IKurokoDemuxer
     public bool SeekMs(int streamIndex, long ms)
     {
         if (_disposed) return false;
-        try { return _mkv.Seek((long)System.Math.Round(ms * 1e6 / _mkv.TimestampScaleNs), streamIndex); }
+        long ticks = (long)System.Math.Round(ms * 1e6 / _mkv.TimestampScaleNs);
+        // fields dual（映像トラックが top・bottom の 2 本）は別々に符号化してあり、キーフレームの位置が揃わない。指定の映像トラックの
+        // キーフレームだけで読み始めを決めると、もう片方の最初のキーフレームが目標より後になり、目標から先もしばらく片方のフィールド
+        // だけになる（SWING_GIRLS_CONCERT_DISC1.krk の 420 秒で約 0.6 秒。Mac の指摘 2026-11-03）。両方のキーフレームが目標以前になる位置から読む。
+        // 映像トラックが 1 本のパーツ（weave・film・単一）は従来どおり。
+        var videos = new List<int>();
+        foreach (var t in _mkv.Tracks) if (t.Type == 1) videos.Add(t.Index);
+        try
+        {
+            return videos.Count >= 2 && videos.Contains(streamIndex)
+                ? _mkv.Seek(ticks, videos)
+                : _mkv.Seek(ticks, streamIndex);
+        }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException) { LastReadThrew = true; return false; }
     }
 
