@@ -762,7 +762,7 @@ internal static class TsNoneConverter
                         // 実体（パケット）があれば 2ch として採用し、宣言のみで実体の無い空スロットだけ除外する。
                         if (ch <= 0)
                         {
-                            if (!AudioHasData(ffprobe, ts, idx)) continue;
+                            if (!AudioHasData(ffprobe, ts, idx)) { log.AppendLine($"audio index={idx}: 形式が分からず実体もほぼ無い（宣言だけ・切れ端）ので使わない"); continue; }
                             ch = 2;
                         }
                         var au = new TsAudio { Index = idx, Channels = ch,
@@ -932,6 +932,10 @@ internal static class TsNoneConverter
     }
 
     // 指定ストリームが先頭 30 秒に実パケットを持つか（channels=0 のデュアルモノ等が空スロットでないことの確認）。
+    // 数個だけの切れ端は「実体なし」とする（2026-11-04：ざんねんないきもの事典の TS の PID 0x111 は 30 秒で 2 パケット・時刻は番組の末尾。
+    // ffmpeg は形式〔サンプルレート〕も読めず、パイプ入力では流れとしても見えないので、-map 0:5 で変換が失敗していた）。
+    // 本物の AAC・MPEG 音声は 1 秒に 40 個前後なので、10 個（約 0.2 秒）以上を実体ありとする。
+    private const int MinAudioPackets = 10;
     private static bool AudioHasData(string ffprobe, string ts, int idx)
     {
         try
@@ -944,7 +948,7 @@ internal static class TsNoneConverter
             p.StandardError.ReadToEnd(); p.WaitForExit();
             // nb_read_packets は複数行で出ることがある。いずれかの行が正の整数なら実体あり。
             foreach (var line in outp.Split('\n'))
-                if (int.TryParse(line.Trim(), out var n) && n > 0) return true;
+                if (int.TryParse(line.Trim(), out var n) && n >= MinAudioPackets) return true;
             return false;
         }
         catch { return false; }
