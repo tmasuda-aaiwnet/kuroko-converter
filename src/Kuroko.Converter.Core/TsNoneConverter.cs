@@ -33,6 +33,8 @@ internal static class TsNoneConverter
     private sealed class TsAudio
     {
         public int Index; public int Pid = -1; public string Codec = ""; public int Channels; public string? Lang; public string? Name;
+        // ffprobe が確定したサンプルレート（0＝形式を確定できなかった。採るかどうかの判定に使う＝SelectAudios）。
+        public int SampleRate;
         // この音声の「出力トラック」の並び。既定は全長1本だが、チャンネル数維持のときは
         // **実フレームのチャンネル数が変わる点で分割**して複数本になる（§下の AudioRun 参照）。
         public List<AudioRun> Runs = new();
@@ -95,6 +97,7 @@ internal static class TsNoneConverter
             try { progTls = TsProgramAnalyzer.Analyze(tsPath, opt.MaxSecondsPerCell, ct); }
             catch { progTls = new(); }
             log.AppendLine($"program-analyze: {TsProgramAnalyzer.LastDebug.Split('\n')[0]}");
+            foreach (var s in services) SelectAudios(s, progTls.FirstOrDefault(t => t.ProgramNumber == s.ProgramNum), log);
 
             string work = Path.Combine(Path.GetTempPath(), "vuecove_tsnone_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(work);
@@ -718,9 +721,11 @@ internal static class TsNoneConverter
         try
         {
             var psi = new ProcessStartInfo(ffprobe,
-                "-v error -show_programs -show_entries " +
+                // 読む範囲は変換の ffmpeg（BuildFfmpegArgs）と同じにする。音声の形式（サンプルレート）を確定できるかを、
+                // 変換の ffmpeg が確定できるかと一致させるため（既定の範囲では、頭から十数秒後に始まる 2 本目の音声が 0 になる）。
+                "-v error -analyzeduration 100M -probesize 100M -show_programs -show_entries " +
                 "program=program_num:program_tags=service_name:" +
-                "stream=index,id,codec_type,codec_name,width,height,field_order,channels,r_frame_rate,display_aspect_ratio:" +
+                "stream=index,id,codec_type,codec_name,width,height,field_order,channels,sample_rate,r_frame_rate,display_aspect_ratio:" +
                 "stream_tags=language -of json \"" + ts + "\"")
             { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
             using var p = Process.Start(psi)!;
@@ -758,14 +763,11 @@ internal static class TsNoneConverter
                     {
                         if (idx < 0) continue;
                         int ch = s.TryGetProperty("channels", out var cv) && cv.TryGetInt32(out var ci) ? ci : 0;
-                        // ARIB のデュアルモノ等は channels=0 と報告される（ffprobe が channel_configuration=0 を数えられない）。
-                        // 実体（パケット）があれば 2ch として採用し、宣言のみで実体の無い空スロットだけ除外する。
-                        if (ch <= 0)
-                        {
-                            if (!AudioHasData(ffprobe, ts, idx)) { log.AppendLine($"audio index={idx}: 形式が分からず実体もほぼ無い（宣言だけ・切れ端）ので使わない"); continue; }
-                            ch = 2;
-                        }
-                        var au = new TsAudio { Index = idx, Channels = ch,
+                        int sr = s.TryGetProperty("sample_rate", out var srv) && int.TryParse(srv.GetString(), out var sri) ? sri : 0;
+                        // ARIB のデュアルモノ等は channels=0 と報告される（ffprobe が channel_configuration=0 を数えられない）。2ch として扱う。
+                        // 採るかどうかは番組の解析の後で決める（SelectAudios）。
+                        if (ch <= 0) ch = 2;
+                        var au = new TsAudio { Index = idx, Channels = ch, SampleRate = sr,
                             Codec = s.TryGetProperty("codec_name", out var ac) ? ac.GetString() ?? "" : "" };
                         // PID（ffprobe の id は "0x110" 等）。TsProgramAnalyzer の PID と対応づける。
                         if (s.TryGetProperty("id", out var idv) && idv.GetString() is string idstr)
@@ -931,27 +933,25 @@ internal static class TsNoneConverter
         return (pw, ph);
     }
 
-    // 指定ストリームが先頭 30 秒に実パケットを持つか（channels=0 のデュアルモノ等が空スロットでないことの確認）。
-    // 数個だけの切れ端は「実体なし」とする（2026-11-04：ざんねんないきもの事典の TS の PID 0x111 は 30 秒で 2 パケット・時刻は番組の末尾。
-    // ffmpeg は形式〔サンプルレート〕も読めず、パイプ入力では流れとしても見えないので、-map 0:5 で変換が失敗していた）。
-    // 本物の AAC・MPEG 音声は 1 秒に 40 個前後なので、10 個（約 0.2 秒）以上を実体ありとする。
-    private const int MinAudioPackets = 10;
-    private static bool AudioHasData(string ffprobe, string ts, int idx)
+    // 音声を採るかどうか。ffprobe がサンプルレートを確定できた音声は採る。確定できなかった音声は、変換の ffmpeg も形式が分からず
+    // 符号化できない（2026-11-04：ざんねんないきもの事典の TS は、録画の末尾に次の番組の「場内音声」〔PID 0x111〕が 1.5 フレームだけ入っていて、
+    // -map 0:5 で変換が失敗した）ので採らない。ただし ARIB のデュアルモノ（channel_configuration=0）は ffprobe が形式を確定できないことが
+    // あるので、番組の解析（TsProgramAnalyzer）が音声のデータそのものからデュアルモノの区間を見つけた PID は採る。
+    private static void SelectAudios(TsService svc, TsProgramTimeline? tl, StringBuilder log)
     {
-        try
+        svc.Audios.RemoveAll(a =>
         {
-            var psi = new ProcessStartInfo(ffprobe,
-                $"-v error -read_intervals %+30 -select_streams {idx} -count_packets -show_entries stream=nb_read_packets -of csv=p=0 \"{ts}\"")
-            { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
-            using var p = Process.Start(psi)!;
-            string outp = p.StandardOutput.ReadToEnd();
-            p.StandardError.ReadToEnd(); p.WaitForExit();
-            // nb_read_packets は複数行で出ることがある。いずれかの行が正の整数なら実体あり。
-            foreach (var line in outp.Split('\n'))
-                if (int.TryParse(line.Trim(), out var n) && n >= MinAudioPackets) return true;
-            return false;
-        }
-        catch { return false; }
+            if (a.SampleRate > 0) return false;
+            if (tl is not null && a.Pid >= 0 && tl.BitstreamDualMono.TryGetValue(a.Pid, out var dm) && dm.Count > 0)
+            {
+                log.AppendLine($"service {svc.ProgramNum}: audio index={a.Index} PID=0x{a.Pid:X}: 形式（サンプルレート）は分からないがデュアルモノなので使う");
+                return false;
+            }
+            string range = tl is not null && a.Pid >= 0 && tl.AudioDataRange.TryGetValue(a.Pid, out var dr)
+                ? $"データは {dr.First / 1000:F1}〜{dr.Last / 1000:F1} 秒" : "データの範囲は不明";
+            log.AppendLine($"service {svc.ProgramNum}: audio index={a.Index} PID=0x{a.Pid:X}: 形式（サンプルレート）が分からないので使わない（{range}）");
+            return true;
+        });
     }
 
     // 音声ファイル（別パスで符号化した audio.mka）を、映像を 0 へ振り直したぶんだけ前へずらす mkvmerge の指定。
